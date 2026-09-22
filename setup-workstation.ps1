@@ -115,7 +115,7 @@ Section "6/8  Install local Canary ASR server dependencies"
 if ($SkipCanary) {
   Write-Host "Skipped (-SkipCanary). This machine must point NEMO_URL at a remote transcription endpoint."
 } else {
-  & cmd /c "$VPip install -c ""$Constraint"" ""nemo_toolkit[asr]>=3.0.0"" soundfile python-multipart pyyaml"
+  & cmd /c "$VPip install -c ""$Constraint"" ""nemo_toolkit[asr]>=3.0.0"" soundfile python-multipart pyyaml panns-inference"
   if ($LASTEXITCODE -ne 0) { throw "nemo_toolkit install failed." }
 }
 
@@ -130,6 +130,8 @@ Write-Host "py_compile: OK"
 
 if (-not $SkipCanary) {
   & cmd /c "$VPy -c ""import nemo; print('nemo_toolkit', getattr(nemo,'__version__','?'))"""
+  & cmd /c "$VPy -c ""import panns_inference; print('panns_inference: OK')"""
+  if ($LASTEXITCODE -ne 0) { throw "panns_inference failed to import - the Canary VAD/music gate needs it on every real transcription, not just at install time." }
 }
 
 & cmd /c "$VPy -c ""import requests, librosa, cv2, scenedetect, opentimelineio, fastapi, uvicorn, PIL, numpy; print('core imports: OK')"""

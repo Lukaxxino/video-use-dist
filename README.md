@@ -45,7 +45,7 @@ CUDA PyTorch (cu128 by default; pass `-TorchIndex
 https://download.pytorch.org/whl/cu126` for an older driver) and pins it,
 installs the core pipeline (`pip install .`, which pulls in `static-ffmpeg`
 for `ffmpeg`/`ffprobe`) and the Canary ASR server deps (`nemo_toolkit[asr]` +
-soundfile/python-multipart/pyyaml), runs a compile check, and seeds `.env`
+soundfile/python-multipart/pyyaml/panns-inference), runs a compile check, and seeds `.env`
 from `.env.example`.
 
 Flags: `-SkipCanary` (this box will call a remote transcript endpoint

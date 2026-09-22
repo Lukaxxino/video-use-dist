@@ -108,7 +108,9 @@ debug media (if ever used) goes only in `source_overrides`.
   `nvidia/canary-1b-v2`; diarization `nvidia/diar_streaming_sortformer_4spk-v2`
   (CC-BY-4.0); `langid_ambernet` sub-window language routing with hysteresis
   thresholds (0.5 stay / 0.75 switch), 4s sub-windows, 2-sub-window
-  agreement, 35s max ASR call. No `HF_TOKEN` needed. If `nemo_toolkit` is not
+  agreement, 35s max ASR call. A combined MarbleNet + PANNs (`panns-inference`,
+  installed alongside `nemo_toolkit`) VAD/music gate runs before LID on every
+  sub-window. No `HF_TOKEN` needed. If `nemo_toolkit` is not
   installed the server returns a mock so the rest of the pipeline still runs.
   `main.py` auto-starts and auto-stops it (`helpers/local_service_autostart.py`,
   reusing `helpers/service_supervisor.py`) around each run that needs it -
