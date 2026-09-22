@@ -47,15 +47,13 @@ interface; opening these to understand behavior is unnecessary:
 |---|---|
 | `main.py` | Orchestrates the pipeline: reserves/selects each versioned artifact and calls the producers below in order. |
 | `helpers/storage.py` | Resolves/reserves/selects every versioned artifact path and ID. Always go through this, never build a path by hand. |
-| `helpers/transcribe.py` | ASR client, dispatches across `--asr-backend {whisper,nemo}`; writes `transcript.json` + `transcript_raw.json` into one transcription run. |
-| `helpers/transcribe_elevenlabs.py` | Reference-only ElevenLabs Scribe client for backend comparison; not part of the automated pipeline, not selectable via `--transcription-run`. |
+| `helpers/transcribe.py` | ASR client; on this bundle only `--asr-backend nemo` is operable (points at the local Canary server below) - no `whisper` server is bundled, so always pass `--asr-backend nemo`. |
 | `visual_connector.py` | PySceneDetect scene extraction + Ollama vision descriptions. |
 | `helpers/audio_analyzer.py` | Per-scene/speaker loudness and words-per-second dynamics. |
 | `helpers/debug_video.py` | Burns scene/transcript overlays into a debug MP4. |
 | `helpers/export_fcpxml.py` | Converts `edl.json` into `timeline.xml`. |
 | `helpers/pack_transcripts.py` | Reads one transcription run's `transcript.json` into a phrase-level `takes_packed.md`. |
-| `helpers/whisper_server.py` | The bundled local Whisper ASR server (`--asr-backend whisper`, default). |
-| `helpers/nemo_server.py` | The bundled local NeMo ASR+diarization server (`--asr-backend nemo`), no `HF_TOKEN` needed. |
+| `helpers/canary_server.py` | The bundled local ASR+diarization server (`nvidia/canary-1b-v2` + streaming Sortformer), reached via `--asr-backend nemo` + `NEMO_URL`; no `HF_TOKEN` needed. See `CLAUDE.md` for the tuning details. |
 
 ## Canonical storage
 
