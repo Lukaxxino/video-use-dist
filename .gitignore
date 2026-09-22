@@ -1,0 +1,9 @@
+# Local runtime state - never committed
+.venv/
+.env
+__pycache__/
+*.pyc
+*.pyo
+
+# Analysis output workspaces (created next to media by default)
+analysis_runs.csv
