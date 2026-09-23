@@ -140,9 +140,10 @@ original. Use `libx264`, not NVENC (NVENC failed on a workstation driver
 older than the one current ffmpeg builds need). Tell the operator in one line
 which audio tracks went into the proxy, so they can ask for a different pair.
 
-From then on pass the proxy path to `main.py` and every storage command. In
-`edl.json`, `sources` still holds the original `.mxf`/`.mov` absolute path -
-the NLE edits the original; the proxy is only what the pipeline analyzed.
+Pass the proxy path to `main.py`. The proxy exists only so analysis can
+extract screenshots and audio - it is deleted as soon as analysis succeeds
+(step 1). In `edl.json`, `sources` holds the original `.mxf`/`.mov` absolute
+path - the NLE edits the original, never the proxy.
 
 ### 1. Establish language and analyze
 
@@ -168,6 +169,20 @@ Prefer explicit IDs when the user names a run.
 If the user only wants transcripts (no editing session), `--transcription-only`
 stops after ASR and audio dynamics and skips visual analysis and the combined
 artifact — see `CLAUDE.md`'s Pipeline commands section.
+
+If step 0 made a proxy, delete it once `main.py` has finished successfully
+(`select-combined` returns a `combined_analysis.json`); keep it only while a
+run failed and will be retried. Everything the session needs afterwards -
+screenshots, transcript, dynamics, combined analysis - is already in the
+workspace. From then on pass the original source path to every storage
+command: the workspace depends only on the file name, which the original and
+the proxy share, and these commands don't read the video file itself.
+
+Deleting the proxy has one consequence: burned-in debug media (step 6) and
+`main.py` runs that reuse this analysis's runs need the exact proxy file
+(they check its size and hash), and a re-encoded proxy won't match. If the
+operator asks for either later, say it takes a fresh proxy and a fresh
+analysis.
 
 ### 2. Select the Primary View before pre-scan
 
@@ -317,6 +332,8 @@ $debugMedia = Join-Path $combinedDir 'debug-scenes-transcript.mp4'
 
 Other mode-specific names are `debug-scenes.mp4` and
 `debug-transcript.mp4`. Never look for `<video>_debug.mp4` beside the source.
+For an `.mxf`/`.mov`/`.mpx` source whose proxy was already deleted (step 1),
+this isn't available without a fresh proxy and analysis.
 
 ### 7. Iterate and persist
 

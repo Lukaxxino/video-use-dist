@@ -30,7 +30,9 @@ The resolver always returns `<AI_EDITS_ROOT>/<video_stem> edit` (`AI_EDITS_ROOT`
 from `.env`; it raises if that's unset) - edit files never go beside the
 source media. Pass the same `--output-root` override to every command if one
 is used. `.mxf`/`.mov`/`.mpx` sources are first converted to an MP4 proxy in
-the workspace (`SKILL.md` step 0); the pipeline then runs on the proxy.
+the workspace (`SKILL.md` step 0); the pipeline analyzes the proxy, which is
+deleted once analysis succeeds - `edl.json`/`timeline.xml` always point at
+the original source.
 
 Workspace layout:
 
