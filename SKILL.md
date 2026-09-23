@@ -140,8 +140,8 @@ original. Use `libx264`, not NVENC (NVENC failed on a workstation driver
 older than the one current ffmpeg builds need). Tell the operator in one line
 which audio tracks went into the proxy, so they can ask for a different pair.
 
-Pass the proxy path to `main.py`. The proxy exists only so analysis can
-extract screenshots and audio - it is deleted as soon as analysis succeeds
+Pass the proxy path to `main.py` for this and every later analysis run of
+this source. Keep the proxy until the operator says the episode is finished
 (step 1). In `edl.json`, `sources` holds the original `.mxf`/`.mov` absolute
 path - the NLE edits the original, never the proxy.
 
@@ -170,19 +170,17 @@ If the user only wants transcripts (no editing session), `--transcription-only`
 stops after ASR and audio dynamics and skips visual analysis and the combined
 artifact — see `CLAUDE.md`'s Pipeline commands section.
 
-If step 0 made a proxy, delete it once `main.py` has finished successfully
-(`select-combined` returns a `combined_analysis.json`); keep it only while a
-run failed and will be retried. Everything the session needs afterwards -
-screenshots, transcript, dynamics, combined analysis - is already in the
-workspace. From then on pass the original source path to every storage
-command: the workspace depends only on the file name, which the original and
-the proxy share, and these commands don't read the video file itself.
+If step 0 made a proxy, keep it after analysis. Every later `main.py` run
+that reuses this analysis - a visual re-run with another vision model
+(`--transcription-run N`), burned-in debug media (step 6) - checks the video's
+file name, size, and sha1 against the stored runs, so it needs this exact
+proxy; a re-encoded one won't match and would force a full re-analysis,
+transcription included. The storage commands (`resolve`, `select-combined`,
+`create-xml`) don't read the video file, so either path works for them.
 
-Deleting the proxy has one consequence: burned-in debug media (step 6) and
-`main.py` runs that reuse this analysis's runs need the exact proxy file
-(they check its size and hash), and a re-encoded proxy won't match. If the
-operator asks for either later, say it takes a fresh proxy and a fresh
-analysis.
+Delete the proxy only when the operator says the episode is finished. Before
+deleting, say plainly that any later re-run or debug video for this source
+then means a new proxy and a full re-analysis.
 
 ### 2. Select the Primary View before pre-scan
 
@@ -332,8 +330,7 @@ $debugMedia = Join-Path $combinedDir 'debug-scenes-transcript.mp4'
 
 Other mode-specific names are `debug-scenes.mp4` and
 `debug-transcript.mp4`. Never look for `<video>_debug.mp4` beside the source.
-For an `.mxf`/`.mov`/`.mpx` source whose proxy was already deleted (step 1),
-this isn't available without a fresh proxy and analysis.
+For an `.mxf`/`.mov`/`.mpx` source, pass the proxy as `<video>` (step 1).
 
 ### 7. Iterate and persist
 
