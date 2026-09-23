@@ -26,9 +26,11 @@ $combined  = python helpers/storage.py select-combined '<video>' --run 3
 $xmlDir    = python helpers/storage.py create-xml '<video>' --name '30 second trailer'
 ```
 
-For normal footage the resolver returns `<video_parent>/<video_stem> edit`.
-Pass the same `--output-root` override to every command if one is used.
-`AI_EDITS_ROOT` in `.env` is the default output root on this machine.
+The resolver always returns `<AI_EDITS_ROOT>/<video_stem> edit` (`AI_EDITS_ROOT`
+from `.env`; it raises if that's unset) - edit files never go beside the
+source media. Pass the same `--output-root` override to every command if one
+is used. `.mxf`/`.mov`/`.mpx` sources are first converted to an MP4 proxy in
+the workspace (`SKILL.md` step 0); the pipeline then runs on the proxy.
 
 Workspace layout:
 

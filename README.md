@@ -40,7 +40,11 @@ From this folder:
 powershell -ExecutionPolicy Bypass -File setup-workstation.ps1
 ```
 
-It creates `.venv` here, installs Ollama via `winget` if missing, installs a
+It installs Python 3.11 per-user via `winget` if only the Microsoft Store alias
+is present, installs `ffmpeg` (`Gyan.FFmpeg`) via `winget` if it's not on PATH,
+creates `.venv` here, makes that venv trust the Windows certificate store
+(`truststore`, so it works behind corporate TLS inspection with verification
+still on), installs Ollama via `winget` if missing, installs a
 CUDA PyTorch (cu128 by default; pass `-TorchIndex
 https://download.pytorch.org/whl/cu126` for an older driver) and pins it,
 installs the core pipeline (`pip install .`, which pulls in `static-ffmpeg`

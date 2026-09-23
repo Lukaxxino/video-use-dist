@@ -1,7 +1,9 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# Defaults only: GPU 0 fits a single-GPU workstation (a hardcoded "1" left
+# this worker on CPU there). A multi-GPU box sets these in its environment.
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
 os.environ["CUDA_MODULE_LOADING"] = "LAZY"
-os.environ["TORCH_CUDA_ARCH_LIST"] = "9.0"
+os.environ.setdefault("TORCH_CUDA_ARCH_LIST", "9.0")
 
 import argparse
 import json
@@ -30,9 +32,19 @@ def main():
     ap.add_argument(
         "--window",
         action="append",
-        required=True,
+        default=[],
         dest="windows",
         help="Path to a window audio file; repeat in order, one per window",
+    )
+    ap.add_argument(
+        "--window-list",
+        type=Path,
+        default=None,
+        help=(
+            "File with one window path per line (appended after any "
+            "--window); avoids Windows' 32767-char command-line limit on "
+            "long videos"
+        ),
     )
     ap.add_argument(
         "--output",
@@ -45,6 +57,10 @@ def main():
         ),
     )
     args = ap.parse_args()
+    if args.window_list:
+        args.windows += _read_window_list(args.window_list)
+    if not args.windows:
+        ap.error("no windows given (use --window and/or --window-list)")
 
     import numpy as np
     import soundfile as sf
@@ -97,6 +113,13 @@ def main():
         results.append({"language": labels[int(top_idx)], "confidence": float(top_prob)})
 
     args.output.write_text(json.dumps(results), encoding="utf-8")
+
+
+def _read_window_list(path):
+    """One window path per line; blank lines ignored; a UTF-8 BOM (as
+    PowerShell writes by default) is tolerated."""
+    lines = Path(path).read_text(encoding="utf-8-sig").splitlines()
+    return [line.strip() for line in lines if line.strip()]
 
 
 if __name__ == "__main__":

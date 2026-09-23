@@ -63,11 +63,12 @@ Never derive the workspace from `video.parent`. Ask the storage helper:
 $workspace = python helpers/storage.py resolve '<video>'
 ```
 
-For ordinary footage it returns `<video_parent>/<video_stem> edit`. Footage
-directly inside `Test Videos/Tested Videos` is special: it returns
-`Test Videos/Finished analysis/<video_stem> edit`. `--output-root <path>` is
-available on `main.py` and every storage helper command when an explicit
-override is required.
+It always returns `<AI_EDITS_ROOT>/<video_stem> edit` - every edit file on
+this machine lives under `AI_EDITS_ROOT` (set in `.env`), never beside the
+source media. If `AI_EDITS_ROOT` is not configured it raises instead of
+guessing. `--output-root <path>` is available on `main.py` and every storage
+helper command when an explicit override is required; pass the same override
+to every command of the session.
 
 The resolved workspace has this shape:
 
@@ -101,6 +102,47 @@ IDs share one workspace-wide sequence. Gaps between artifact kinds are normal.
 Do not choose a run by scanning directory names.
 
 ## Process
+
+### 0. Convert MXF/MOV/MPX sources to an MP4 proxy
+
+If the source is `.mxf`, `.mov`, or `.mpx`, convert it before anything else,
+without asking - the pipeline analyzes the proxy, not the original. The proxy
+goes inside the source's own workspace, keeping the source's file stem so it
+resolves to the same workspace:
+
+```powershell
+$workspace = python helpers/storage.py resolve '<source>'
+# proxy: "$workspace\PROXY\<source stem>.mp4"
+```
+
+Use `ffmpeg`/`ffprobe` from PATH, or `.venv\Scripts\static_ffmpeg.exe` /
+`static_ffprobe.exe` if they're not there. First list the audio streams:
+
+```powershell
+ffprobe -v error -select_streams a -show_entries stream=index,channels -of csv=p=0 '<source>'
+```
+
+Pick the audio explicitly - never `-map 0:a?`, which copies every track and
+the pipeline then transcribes only the first one:
+- one audio stream: `-map 0:a:0`
+- several mono streams (typical broadcast MXF, tracks 1+2 = program stereo):
+  `-filter_complex "[0:a:0][0:a:1]amerge=inputs=2[a]" -map "[a]"`
+
+```powershell
+ffmpeg -hide_banner -y -i '<source>' -map 0:v:0 <audio map from above> `
+  -vf "yadif=deint=interlaced,scale=-2:'min(720,ih)'" `
+  -c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p `
+  -c:a aac -b:a 192k -ac 2 -movflags +faststart '<proxy>'
+```
+
+Keep the source frame rate (no `-r`) so proxy timecodes map 1:1 to the
+original. Use `libx264`, not NVENC (NVENC failed on a workstation driver
+older than the one current ffmpeg builds need). Tell the operator in one line
+which audio tracks went into the proxy, so they can ask for a different pair.
+
+From then on pass the proxy path to `main.py` and every storage command. In
+`edl.json`, `sources` still holds the original `.mxf`/`.mov` absolute path -
+the NLE edits the original; the proxy is only what the pipeline analyzed.
 
 ### 1. Establish language and analyze
 

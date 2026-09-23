@@ -35,9 +35,8 @@ $sceneMap = Join-Path $combinedDir 'scene_map.md'
 
 Omit `--run` only when the user wants the newest complete combined artifact.
 If analysis used `--output-root`, pass that same override to both commands.
-Footage directly inside `Test Videos/Tested Videos` resolves through the
-helper to `Test Videos/Finished analysis/<video_stem> edit`; never assemble
-that special path manually.
+Workspaces resolve through the helper to `<AI_EDITS_ROOT>/<video_stem> edit`;
+never assemble that path manually.
 
 The input and output contract is:
 

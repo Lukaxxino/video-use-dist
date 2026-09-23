@@ -42,9 +42,8 @@ $edl = Join-Path $xmlDir 'edl.json'
 ```
 
 When analysis used `--output-root`, pass the identical override to both
-commands. Footage directly under `Test Videos/Tested Videos` resolves through
-the helper to `Test Videos/Finished analysis/<video_stem> edit`; do not
-construct that special path yourself.
+commands. Workspaces resolve through the helper to
+`<AI_EDITS_ROOT>/<video_stem> edit`; do not construct that path yourself.
 
 `$sceneScript` is what you read to browse the material (Pass 1 onward).
 `$combined` is the one combined analysis `helpers/scene_lookup.py` fetches

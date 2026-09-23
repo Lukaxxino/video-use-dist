@@ -39,9 +39,34 @@ Write-Host "Repo root: $RepoRoot"
 # ---------------------------------------------------------------------------
 Section "1/8  Preflight checks"
 # ---------------------------------------------------------------------------
-$py = if (Have "py") { "py -3" } elseif (Have "python") { "python" } else { $null }
-if (-not $py) { throw "Python not found. Install Python 3.10-3.11 (x64) and re-run." }
-$pyver = (& cmd /c "$py --version") 2>&1
+function Test-RealPython($cmd) {
+  # The Microsoft Store alias (WindowsApps\python.exe) satisfies Get-Command
+  # but only points at the Store; a real interpreter prints "Python 3.x".
+  # stderr is merged inside cmd so PowerShell 5.1 doesn't turn it into a
+  # terminating error under $ErrorActionPreference = "Stop".
+  try { $out = (& cmd /c "$cmd --version 2>&1") | Out-String } catch { return $false }
+  return ($LASTEXITCODE -eq 0 -and $out -match "Python 3\.")
+}
+$py = $null
+foreach ($cand in "py -3", "python") {
+  if ((Have $cand.Split(" ")[0]) -and (Test-RealPython $cand)) { $py = $cand; break }
+}
+if (-not $py) {
+  Write-Host "No working Python (only the Microsoft Store alias, or nothing) -- installing Python 3.11 for this user via winget ..."
+  try {
+    winget install --id Python.Python.3.11 --scope user --accept-package-agreements --accept-source-agreements --silent
+  } catch {
+    Warn "winget Python install failed ($_)."
+  }
+  # PATH changes need a new process; put the per-user install first for this one.
+  $userPyDir = Join-Path $env:LOCALAPPDATA "Programs\Python\Python311"
+  if (Test-Path (Join-Path $userPyDir "python.exe")) {
+    $env:PATH = "$userPyDir;$userPyDir\Scripts;$env:PATH"
+    if (Test-RealPython "python") { $py = "python" }
+  }
+  if (-not $py) { throw "Python not found. Install Python 3.11 (x64): 'winget install Python.Python.3.11 --scope user' or python.org, then re-run." }
+}
+$pyver = (& cmd /c "$py --version 2>&1")
 Write-Host "Python: $pyver"
 $verOk = & cmd /c "$py -c ""import sys; print(1 if sys.version_info[:2] >= (3,10) and sys.version_info[:2] <= (3,12) else 0)"""
 if ($verOk.Trim() -ne "1") { Warn "Python 3.10-3.12 recommended (pyproject requires >=3.10; nemo_toolkit is happiest on 3.10/3.11)." }
@@ -53,8 +78,20 @@ if (Have "nvidia-smi") {
   Warn "nvidia-smi not found. Transcription (Canary) needs a CUDA GPU. Vision via Ollama can still run CPU/GPU."
 }
 
-foreach ($c in "ffmpeg","ffprobe") {
-  if (Have $c) { Write-Host "${c}: OK (already on PATH)" } else { Write-Host "${c}: will be auto-provided by the static-ffmpeg package on first pipeline run." }
+if ((Have "ffmpeg") -and (Have "ffprobe")) {
+  Write-Host "ffmpeg/ffprobe: OK (already on PATH)"
+} else {
+  # static-ffmpeg can still provide it on first pipeline run, but its download
+  # failed behind a TLS-inspecting proxy (then WinError 2 at extraction), and
+  # SKILL.md step 0 calls ffmpeg directly for MXF/MOV proxies -- so install a
+  # system ffmpeg as the backup.
+  Write-Host "ffmpeg not on PATH -- installing via winget as a backup to static-ffmpeg ..."
+  try {
+    winget install --id Gyan.FFmpeg --accept-package-agreements --accept-source-agreements --silent
+    if (Have "ffmpeg") { Write-Host "ffmpeg: installed." } else { Warn "ffmpeg installed but not on PATH in this shell yet -- a new shell will see it; static-ffmpeg covers this run." }
+  } catch {
+    Warn "winget ffmpeg install failed ($_); static-ffmpeg will try on first pipeline run."
+  }
 }
 if (Have "ollama") {
   Write-Host "ollama: OK"
@@ -86,8 +123,27 @@ $VPip = "$VPy -m pip"
 # ---------------------------------------------------------------------------
 Section "3/8  Upgrade pip / setuptools / wheel"
 # ---------------------------------------------------------------------------
-& cmd /c "$VPip install --upgrade pip setuptools wheel"
-if ($LASTEXITCODE -ne 0) { throw "pip upgrade failed." }
+# --use-feature=truststore: verify TLS against the Windows certificate store
+# (where a corporate TLS-inspection root CA lives) instead of pip's bundled
+# certifi; a fresh venv's pip otherwise fails with CERTIFICATE_VERIFY_FAILED
+# behind such a proxy. pip >= 24.2 does this by default once upgraded.
+& cmd /c "$VPip install --use-feature=truststore --upgrade pip setuptools wheel"
+if ($LASTEXITCODE -ne 0) {
+  Warn "pip upgrade with truststore failed; retrying without it."
+  & cmd /c "$VPip install --upgrade pip setuptools wheel"
+  if ($LASTEXITCODE -ne 0) { throw "pip upgrade failed (behind a TLS-inspecting proxy? see the workstation-setup skill's known failures)." }
+}
+
+# Same fix for everything else that runs in this venv (requests, httpx,
+# huggingface_hub model downloads, static-ffmpeg): a .pth file makes every
+# interpreter start inject truststore. Certificate verification stays on --
+# it just trusts the Windows store, which also holds the public roots, so
+# this is harmless on networks without TLS inspection.
+& cmd /c "$VPip install truststore"
+if ($LASTEXITCODE -ne 0) { throw "truststore install failed." }
+$SitePackages = (& $VPy -c "import sysconfig; print(sysconfig.get_paths()['purelib'])").Trim()
+Set-Content -Path (Join-Path $SitePackages "zz_truststore_windows.pth") -Value "import truststore; truststore.inject_into_ssl()" -Encoding ascii
+Write-Host "truststore: TLS in this venv verifies against the Windows certificate store."
 
 # ---------------------------------------------------------------------------
 Section "4/8  Install CUDA PyTorch  ($TorchIndex)"
@@ -130,7 +186,10 @@ Write-Host "py_compile: OK"
 
 if (-not $SkipCanary) {
   & cmd /c "$VPy -c ""import nemo; print('nemo_toolkit', getattr(nemo,'__version__','?'))"""
-  & cmd /c "$VPy -c ""import panns_inference; print('panns_inference: OK')"""
+  # Pre-fetch panns' labels CSV + Cnn14 checkpoint (~300 MB) the same way the
+  # runtime does: importing panns_inference otherwise shells out to `wget`,
+  # which Windows doesn't have, and then fails on the missing CSV.
+  & cmd /c "$VPy -c ""import sys; sys.path.insert(0, 'helpers'); from nemo_vad_worker import _ensure_panns_assets; _ensure_panns_assets(None); import panns_inference; print('panns_inference: OK')"""
   if ($LASTEXITCODE -ne 0) { throw "panns_inference failed to import - the Canary VAD/music gate needs it on every real transcription, not just at install time." }
 }
 

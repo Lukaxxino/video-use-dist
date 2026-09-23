@@ -60,8 +60,14 @@ def main():
         )
     )
     ap.add_argument(
-        "--window", action="append", required=True, dest="windows",
+        "--window", action="append", default=[], dest="windows",
         help="Path to a sub-window audio file; repeat in order, one per sub-window",
+    )
+    ap.add_argument(
+        "--window-list", type=Path, default=None,
+        help="File with one sub-window path per line (appended after any "
+             "--window); avoids Windows' 32767-char command-line limit on "
+             "long videos",
     )
     ap.add_argument("--output", type=Path, required=True)
     ap.add_argument("--speech-frame-threshold", type=float, default=DEFAULT_SPEECH_FRAME_THRESHOLD)
@@ -73,6 +79,10 @@ def main():
              "downloads/caches its own default under ~/panns_data if omitted",
     )
     args = ap.parse_args()
+    if args.window_list:
+        args.windows += _read_window_list(args.window_list)
+    if not args.windows:
+        ap.error("no windows given (use --window and/or --window-list)")
 
     import numpy as np
     import soundfile as sf
@@ -110,16 +120,23 @@ def main():
                 input_signal=torch.tensor(audio_16k).unsqueeze(0).to(device),
                 input_signal_length=torch.tensor([len(audio_16k)]).to(device),
             )
-            # class 0 = speech, class 1 = non-speech -- the OPPOSITE of what
-            # was first assumed here. Corrected 2026-08-18 after empirical
-            # verification against known-speech audio (this project's own
-            # test clip, a continuous 4s spoken segment) reproducibly showed
-            # mean class0=0.992 / class1=0.008, i.e. class 0 dominant during
-            # real speech -- the original class-1 assumption silently
-            # skip_silence'd nearly all real speech in production (caught by
-            # a full-pipeline smoke test returning an entirely empty
-            # transcript for a clip known to contain continuous narration).
-            frame_probs = torch.softmax(logits, dim=-1)[0, :, 0]
+            # class 1 = speech (labels ['0','1']) on the editor-workstation
+            # stack. Switched from class 0 on 2026-09-23 after an on-site
+            # install (nemo_toolkit 3.0.0, RTX 2000 Ada): with class 0,
+            # digital silence and white noise both scored speech_fraction
+            # 1.000 (-> "process"), and a 42-min episode sent only 40.5% of
+            # diarized speech to ASR, producing a "keska keska..."
+            # hallucination loop from silence. With class 1: silence/noise
+            # 0.000, same episode 96.6% coverage, 1715 -> 3988 words.
+            #
+            # This index has flipped before (class 0 was chosen 2026-08-18
+            # on one clip for the GH200 stack), and the unmerged
+            # worktree-gh200-vad-gate-fix branch documents class 1 dominating
+            # continuous speech in one video and class 0 in another -- it may
+            # be content- or stack-dependent. Before flipping it again, run
+            # this worker on digital silence (ffmpeg anullsrc) AND a known
+            # speech clip: silence must give speech_fraction ~0, speech > 0.5.
+            frame_probs = torch.softmax(logits, dim=-1)[0, :, 1]
             speech_fraction = (
                 float((frame_probs > args.speech_frame_threshold).float().mean())
                 if frame_probs.numel() else 0.0
@@ -239,6 +256,13 @@ def _load_marblenet_frame_vad():
 
     nemo_path = hf_hub_download(repo_id=MARBLENET_REPO_ID, filename=MARBLENET_FILENAME)
     return EncDecFrameClassificationModel.restore_from(nemo_path, strict=False)
+
+
+def _read_window_list(path):
+    """One window path per line; blank lines ignored; a UTF-8 BOM (as
+    PowerShell writes by default) is tolerated."""
+    lines = Path(path).read_text(encoding="utf-8-sig").splitlines()
+    return [line.strip() for line in lines if line.strip()]
 
 
 if __name__ == "__main__":

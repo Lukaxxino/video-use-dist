@@ -228,15 +228,15 @@ def remove_complete_artifact(workspace_root: Path, kind: ArtifactKind, artifact_
 
 
 def resolve_output_root(video_path: Path, override: Path | None = None) -> Path:
+    """Workspace for a video: `--output-root` if given, otherwise always
+    `<AI_EDITS_ROOT>/<video stem> edit`. On editor workstations every edit
+    file lives under AI_EDITS_ROOT, never beside the source media (sources
+    are often on read-only or shared storage). Raises RuntimeError when
+    AI_EDITS_ROOT is not configured."""
     video_path = Path(video_path).resolve()
     if override is not None:
         return Path(override).resolve()
-    if (
-        video_path.parent.name.casefold() == "tested videos"
-        and video_path.parent.parent.name.casefold() == "test videos"
-    ):
-        return video_path.parent.parent / "Finished analysis" / f"{video_path.stem} edit"
-    return video_path.parent / f"{video_path.stem} edit"
+    return resolve_ai_edits_root() / f"{video_path.stem} edit"
 
 
 def resolve_ai_edits_root() -> Path:

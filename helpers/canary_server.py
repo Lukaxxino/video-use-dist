@@ -429,6 +429,15 @@ def _load_asr_model(asr_model_cls) -> None:
     _asr_model = asr_model_cls.from_pretrained(model_name=MODEL_NAME)
 
 
+def _window_list_args(paths: list, list_path: Path) -> list:
+    """Writes window paths (UTF-8, one per line) to list_path and returns the
+    worker args that point at it. Passing each window as its own --window
+    argument broke on Windows past ~15-20 min of audio: ~640 4s sub-windows
+    x ~75 chars overflows the 32767-char command-line limit (WinError 206)."""
+    list_path.write_text("\n".join(str(p) for p in paths) + "\n", encoding="utf-8")
+    return ["--window-list", str(list_path)]
+
+
 def _diarize_windows_in_subprocess(
     window_paths: list, diar_model_name: str, tmpdir: Path
 ) -> list:
@@ -445,8 +454,7 @@ def _diarize_windows_in_subprocess(
         "--output",
         str(output_path),
     ]
-    for window_path in window_paths:
-        cmd += ["--window", str(window_path)]
+    cmd += _window_list_args(window_paths, tmpdir / "diarization_windows.txt")
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(
@@ -480,8 +488,7 @@ def _detect_languages_in_subprocess(
         "--output",
         str(output_path),
     ]
-    for audio_path in audio_paths:
-        cmd += ["--window", str(audio_path)]
+    cmd += _window_list_args(audio_paths, tmpdir / "langid_windows.txt")
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(
@@ -512,8 +519,7 @@ def _gate_subwindows_in_subprocess(audio_paths: list, tmpdir: Path) -> list:
         "--output",
         str(output_path),
     ]
-    for audio_path in audio_paths:
-        cmd += ["--window", str(audio_path)]
+    cmd += _window_list_args(audio_paths, tmpdir / "vad_gate_windows.txt")
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(
