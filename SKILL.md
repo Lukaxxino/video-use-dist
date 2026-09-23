@@ -178,9 +178,7 @@ proxy; a re-encoded one won't match and would force a full re-analysis,
 transcription included. The storage commands (`resolve`, `select-combined`,
 `create-xml`) don't read the video file, so either path works for them.
 
-Delete the proxy only when the operator says the episode is finished. Before
-deleting, say plainly that any later re-run or debug video for this source
-then means a new proxy and a full re-analysis.
+Delete the proxy only when the operator says the episode is finished.
 
 ### 2. Select the Primary View before pre-scan
 
