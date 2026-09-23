@@ -39,17 +39,20 @@ than proceeding and letting the pull fail.
    touching anything.
 2. **Present the plan, get exactly one confirmation for the whole flow.**
    The single yes/no you ask for here covers everything through hand-off
-   (step 7) - the `setup-workstation.ps1` run AND the post-install actions
-   in step 5 (`ollama pull`, starting `canary_server.py` for its first,
-   long weight download, the smoke test). Don't ask again before step 5
+   (step 8) - the `setup-workstation.ps1` run AND the post-install actions
+   in step 6 (`ollama pull`, starting `canary_server.py` for its first,
+   long weight download, the smoke test). Don't ask again before step 6
    just because it's a separate section of this document. State: what
    `setup-workstation.ps1` will do (its 8 sections, in order 1 of 8
-   through 8 of 8), that step 5 follows immediately after with no further
-   prompt, the rough download size (CUDA torch + nemo_toolkit +
+   through 8 of 8), that steps 4 and 6 follow immediately after with no
+   further prompt beyond the one-time edit-workspace question, the rough
+   download size (CUDA torch + nemo_toolkit +
    Canary/Sortformer weights + Ollama + the vision model - tens of GB
    combined), and what it changes on the system (installs Ollama via
    `winget` if missing, creates `.venv` inside this folder - nothing else
-   outside the repo). Wait for a yes.
+   outside the repo). Mention that if this is a first install, you'll ask
+   one more question right after the script finishes: where to store edit
+   workspaces (step 4). Wait for a yes.
 
    After that yes, run to completion without further stops, EXCEPT for
    these three cases, which always require asking first even mid-flow:
@@ -57,15 +60,29 @@ than proceeding and letting the pull fail.
      `-TorchIndex`, whether reported VRAM looks too small for the vision
      model about to be pulled);
    - killing, restarting, or replacing a process that turns out to
-     already be running (see step 5);
-   - a failure that isn't in the table below (step 4) - a *table-listed*
+     already be running (see step 6);
+   - a failure that isn't in the table below (step 5) - a *table-listed*
      failure does not need a stop; apply its Fix and narrate what you're
      doing as you go, you don't need to ask permission for a fix that's
      already been documented and approved by a prior run.
 3. **Run `setup-workstation.ps1`.** Stream its output rather than
    summarizing it after the fact - the operator should see progress as it
    happens.
-4. **On failure, debug before retrying.** Read the actual error text
+4. **Confirm the edit-workspace location - only if `.env` was just
+   created** (section 8 of 8 seeds it from `.env.example` only when no
+   `.env` exists yet; if `.env` already existed, the script left it alone
+   - skip this step entirely, don't ask). Ask where edit workspaces
+   (`AI_EDITS_ROOT`) should live: the default is local disk
+   (`%USERPROFILE%\Documents\AI-edits`, already in the seeded `.env`), or
+   the operator may want a shared/network drive instead - see
+   `helpers/storage.py`'s `get_env("AI_EDITS_ROOT")` for how it's consumed
+   and the `ai-edits-workspace-output-root` context if this session has
+   it. If
+   they want the default, leave `.env` as-is. If they name a different
+   path, update the `AI_EDITS_ROOT` line in `.env` to it and create that
+   directory if it doesn't exist yet. This is a one-time question, not a
+   pattern to repeat elsewhere in this flow.
+5. **On failure, debug before retrying.** Read the actual error text
    first. Check the table below for a known cause - match on the
    underlying error, not the exact surrounding circumstance (e.g. the
    `panns_inference` row applies whether the import fails during setup's
@@ -78,7 +95,7 @@ than proceeding and letting the pull fail.
    or restart a process (Ollama, a stuck `canary_server.py`, an old
    install) without asking first**, even though the rest of this flow runs
    unattended.
-5. **Post-install.** No separate confirmation needed (step 2 already
+6. **Post-install.** No separate confirmation needed (step 2 already
    covers this). `ollama pull gemma4:12b`; then `helpers\canary_server.py
    --port 8002`: first check whether something is already listening on
    that port - if so, don't touch it, just verify it's actually a Canary
@@ -92,15 +109,16 @@ than proceeding and letting the pull fail.
    run the transcription-only smoke test from `README.md` against a clip
    the operator points to; confirm the result is real output, not the
    `"mock": true` fallback.
-6. **Log every step as it happens** to `install-log.md` in this folder
+7. **Log every step as it happens** to `install-log.md` in this folder
    (create it if absent). Log at sub-step granularity, not just once per
    numbered Flow step above: each script section as it completes, the
-   exact text of any failure, the fix applied and why, each post-install
-   action (`ollama pull` done, canary_server started/found running,
-   smoke-test result), and the final hand-off - each as its own
+   edit-workspace location decision (default kept, or the path chosen and
+   why), the exact text of any failure, the fix applied and why, each
+   post-install action (`ollama pull` done, canary_server started/found
+   running, smoke-test result), and the final hand-off - each as its own
    timestamped entry, written when that thing happens, not batched into a
    summary at the end.
-7. **Hand off.** Tell the operator the machine is ready and that the next
+8. **Hand off.** Tell the operator the machine is ready and that the next
    conversation should go through the `video-analyzer` skill.
 
 ## Known failure modes
